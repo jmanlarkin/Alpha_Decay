@@ -31,6 +31,10 @@ def Plot(x, y, yfit, err, Name, plotFig = True, saveFig = True, xlab = 'Channel 
     ax[1].plot(x, np.zeros(len(x)), zorder=-5, color='orange', linewidth=1.75)
     ax[0].set_xlim(x[0], x[-1])
     ax[1].set_xlim(x[0], x[-1])
+    ax[0].ticklabel_format(style='plain')
+    ax[1].ticklabel_format(style='plain')
+    ax[0].ticklabel_format(useOffset=False)
+    ax[1].ticklabel_format(useOffset=False)
     
     ax[1].set_xlabel(str(xlab), fontsize=14)
     ax[1].set_ylabel('Residuals', fontsize=14)
@@ -57,6 +61,9 @@ def Plot(x, y, yfit, err, Name, plotFig = True, saveFig = True, xlab = 'Channel 
 #Linear Function
 def Linear(x, a, b):
     return a*x + b
+
+def LinearInv(y, a, b):
+    return (y - b) / a
 
 #Chi Squared for Linear
 def ChiSq_Linear(x, y, err, param, sig = 0.05):
@@ -90,7 +97,7 @@ def ChiSq_Gauss(x, y, err, param, sig = 0.05):
         if err[i] != 0:
             value = (residuals[i]/err[i])**2
             out.append(value)
-    dof = len(out) - 3
+    dof = len(out) - 2
     chi_theoretical = chi2.ppf(input_chi2, df=dof)/dof
     chi_calc = np.sum(out)/dof
     return [chi_calc, chi_theoretical]
@@ -125,3 +132,52 @@ def Fit_Gauss(data, width = 10, plotFig = False, saveFig = False):
         Plot(x, y, y_gauss, yerr, 'Peak_' + str(i+1), plotFig, saveFig)
         
     return out
+
+#Fitting for double-Gaussian peak of Am-241
+def linear_Gauss(x, m, o, A, B, C):
+    return Gaussian(x, m, o, A) + B * x + C
+
+def Chi2(x, y, err, param, func, sig = 0.05):
+    input_chi2 = 1. - sig
+    index = len(err)
+    yfit = func(x, *param)
+    residuals = y - yfit
+    out = []
+    for i in range(index):
+        if err[i] != 0:
+            value = (residuals[i]/err[i])**2
+            out.append(value)
+    dof = len(out) - len(param)
+    chi_theoretical = chi2.ppf(input_chi2, df=dof)/dof
+    chi_calc = np.sum(out)/dof
+    return [chi_calc, chi_theoretical]
+
+def ChiSq_Gauss(x, y, err, param, sig = 0.05):
+    input_chi2 = 1. - sig
+    index = len(err)
+    yfit = Gaussian(x, *param)
+    residuals = y - yfit
+    out = []
+    for i in range(index):
+        if err[i] != 0:
+            value = (residuals[i]/err[i])**2
+            out.append(value)
+    dof = len(out) - 2
+    chi_theoretical = chi2.ppf(input_chi2, df=dof)/dof
+    chi_calc = np.sum(out)/dof
+    return [chi_calc, chi_theoretical]
+
+def Fit(data, center, width = 30):
+    xdata = np.asarray(range(2048))
+    ydata = np.asarray(data)
+    center = int(center)
+    interval = [center - width, center + width + 1]
+    pov, cov = curve_fit(Gaussian, xdata[interval[0]:interval[1]], ydata[interval[0]:interval[1]], p0 = [center, width/2, 200])
+    err = np.sqrt(np.diag(cov))
+    center = int(pov[0])
+    interval = [center - width, center + width + 1]
+    x = xdata[interval[0]:interval[1]]
+    y = ydata[interval[0]:interval[1]]
+    yerr = np.sqrt(y)
+    chi2 = ChiSq_Gauss(x, y, yerr, pov)
+    return [pov, err, *chi2]
